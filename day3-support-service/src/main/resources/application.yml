@@ -49,3 +49,9 @@ info:
   app:
     name: ${spring.application.name}
     description: Day 3 support service (customers + tickets on PostgreSQL)
+
+springdoc:
+  swagger-ui:
+    # Keep endpoints in source order and show the request duration in "Try it out".
+    operations-sorter: method
+    display-request-duration: true

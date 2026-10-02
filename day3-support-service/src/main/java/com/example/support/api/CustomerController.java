@@ -9,10 +9,12 @@ import com.example.support.dto.TicketResponse;
 import com.example.support.dto.ValidCustomerId;
 import com.example.support.service.CustomerService;
 import com.example.support.service.TicketService;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Size;
 import java.net.URI;
 import java.util.Set;
+import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
@@ -35,6 +37,7 @@ import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
  * Note: {@code @PageableDefault} has its own default size (10) that wins over
  * {@code spring.data.web.pageable.default-page-size}, so it is set explicitly.
  */
+@Tag(name = "Customers", description = "Customer CRUD, search and ticket summaries")
 @RestController
 @RequestMapping("/api/customers")
 public class CustomerController {
@@ -53,13 +56,14 @@ public class CustomerController {
     @GetMapping
     public PageResponse<CustomerResponse> search(
             @RequestParam(required = false) @Size(max = 100) String q,
+            @ParameterObject
             @PageableDefault(size = 20, sort = "id") Pageable pageable) {
         return PageResponse.from(customerService.search(q, SortGuard.requireSortable(pageable, SORTABLE)));
     }
 
     /** Customers with their total and open ticket counts, most open tickets first (fixed order). */
     @GetMapping("/ticket-summary")
-    public PageResponse<CustomerTicketSummary> ticketSummary(Pageable pageable) {
+    public PageResponse<CustomerTicketSummary> ticketSummary(@ParameterObject Pageable pageable) {
         return PageResponse.from(customerService.ticketSummary(SortGuard.requireSortable(pageable, Set.of())));
     }
 
@@ -73,6 +77,7 @@ public class CustomerController {
     public PageResponse<TicketResponse> tickets(
             @PathVariable @ValidCustomerId String id,
             @RequestParam(required = false) TicketStatus status,
+            @ParameterObject
             @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
         return PageResponse.from(
                 ticketService.search(status, id, SortGuard.requireSortable(pageable, TICKET_SORTABLE)));

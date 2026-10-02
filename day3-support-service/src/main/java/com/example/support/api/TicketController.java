@@ -8,10 +8,12 @@ import com.example.support.dto.TicketStatusChangeResponse;
 import com.example.support.dto.TicketStatusRequest;
 import com.example.support.dto.ValidCustomerId;
 import com.example.support.service.TicketService;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.net.URI;
 import java.util.List;
 import java.util.Set;
+import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
@@ -26,6 +28,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
+@Tag(name = "Tickets", description = "Open, search and update support tickets")
 @RestController
 @RequestMapping("/api/tickets")
 public class TicketController {
@@ -43,6 +46,7 @@ public class TicketController {
     public PageResponse<TicketResponse> search(
             @RequestParam(required = false) TicketStatus status,
             @RequestParam(required = false) @ValidCustomerId String customerId,
+            @ParameterObject
             @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
         return PageResponse.from(
                 ticketService.search(status, customerId, SortGuard.requireSortable(pageable, SORTABLE)));
