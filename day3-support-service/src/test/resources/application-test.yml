@@ -1,0 +1,12 @@
+# Added on top of dev or prod in tests: swap PostgreSQL for an in-memory H2 database in PostgreSQL mode.
+# ${random.uuid} gives every Spring test context its own empty database. The same Flyway migrations run here,
+# so keep them to SQL that both H2 and PostgreSQL understand.
+spring:
+  datasource:
+    url: jdbc:h2:mem:${random.uuid};MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DEFAULT_NULL_ORDERING=HIGH
+    username: sa
+    password: ""
+
+logging:
+  level:
+    org.hibernate.SQL: WARN

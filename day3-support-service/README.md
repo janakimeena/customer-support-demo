@@ -1,0 +1,145 @@
+# Day 3 Demo — REST + Database Design (Customers & Tickets on PostgreSQL)
+
+The Day 2 customer service, now backed by a real database. Customers from Day 2 and tickets from the Day 1 CSV files live in PostgreSQL. The schema is managed by Flyway and accessed through Spring Data JPA, and a paged, validated REST API sits on top. It is still layered as **controller → service → repository**, and the services return **DTOs**, never entities.
+
+Day 2 stays untouched in `../day2-customer-service`.
+
+## Prerequisites
+
+- JDK 21
+- Docker (for PostgreSQL). Maven is not required: use `./mvnw`.
+- Tests do **not** need Docker. They run on in-memory H2 in PostgreSQL mode.
+
+## Run
+
+```sh
+cd day3-support-service
+./mvnw spring-boot:run          # dev profile: starts compose.yaml (Postgres on localhost:5433), runs Flyway, loads sample data
+```
+
+`spring-boot-docker-compose` runs `docker compose up` for you and wires the DataSource to the container. If you prefer to start the database yourself, run `docker compose up -d` first. The app then uses the `spring.datasource.*` values in `application-dev.yml`.
+
+```sh
+docker compose down             # stop Postgres (data is kept in the support-db volume)
+docker compose down -v          # stop and delete the data; Flyway rebuilds everything on the next start
+```
+
+Production-like run against your own database:
+
+```sh
+SUPPORT_DB_URL=jdbc:postgresql://db:5432/support SUPPORT_DB_USER=support SUPPORT_DB_PASSWORD=secret \
+  java -jar target/support-service-0.0.1-SNAPSHOT.jar --spring.profiles.active=prod
+```
+
+## Deploy a short-lived demo (Render free tier, no credit card)
+
+`../render.yaml` creates a free Docker web service and a free PostgreSQL database. The container is built from `Dockerfile` and runs with the `prod` profile plus the sample data.
+
+1. Push the `Customer Support` folder to a GitHub repository (with `render.yaml` at its root).
+2. On [render.com](https://render.com), sign up with GitHub. Then choose **New → Blueprint**, pick the repository and click **Apply**.
+3. When the first build finishes (5–10 minutes), open `https://<service>.onrender.com/api/customers`.
+
+Free services sleep after ~15 minutes idle (the first request then takes ~1 minute), and the free database expires after ~30 days. The API has no authentication, so use sample data only. To test the same image locally: `docker build -t support-service .`
+
+## Try the API
+
+```sh
+curl 'localhost:8080/api/customers?page=0&size=2&sort=name,desc'           # paging + sorting
+curl 'localhost:8080/api/customers?q=asha'                                 # search by name
+curl  localhost:8080/api/customers/ticket-summary                          # join + group by
+curl 'localhost:8080/api/tickets?status=OPEN&sort=createdAt,asc'           # filter, joined customer name
+curl 'localhost:8080/api/customers/C-100/tickets?status=OPEN'              # sub-resource
+
+curl -i -X POST localhost:8080/api/tickets -H 'Content-Type: application/json' \
+     -d '{"customerId":"C-104","subject":"Where is my order?","priority":"HIGH"}'
+curl -X PATCH localhost:8080/api/tickets/1008/status -H 'Content-Type: application/json' -d '{"status":"CLOSED"}'
+curl  localhost:8080/api/tickets/1008/history
+
+curl -i -X DELETE localhost:8080/api/customers/C-100                       # 409: customer still has tickets
+curl  localhost:8080/api/customers/abc                                     # 400: bad id format
+curl 'localhost:8080/api/customers?sort=version'                           # 400: sort property not allowed
+curl  localhost:8080/actuator/flyway                                       # applied migrations (dev only)
+```
+
+| Method | Path | Success | Errors |
+| --- | --- | --- | --- |
+| GET | `/api/customers?q=&page=&size=&sort=` | 200 page | 400 bad sort |
+| GET | `/api/customers/ticket-summary?page=&size=` | 200 page | |
+| GET | `/api/customers/{id}` | 200 | 400 bad id, 404 |
+| GET | `/api/customers/{id}/tickets?status=&page=&size=&sort=` | 200 page | 400, 404 |
+| POST | `/api/customers` | 201 + `Location` | 400, 409 duplicate email / limit |
+| PUT | `/api/customers/{id}` | 200 | 400, 404, 409 |
+| DELETE | `/api/customers/{id}` | 204 | 404, 409 has tickets |
+| GET | `/api/tickets?status=&customerId=&page=&size=&sort=` | 200 page | 400, 404 unknown customer |
+| GET | `/api/tickets/{id}` | 200 | 404 |
+| GET | `/api/tickets/{id}/history` | 200 list | 404 |
+| POST | `/api/tickets` | 201 + `Location` | 400, 404 unknown customer |
+| PATCH | `/api/tickets/{id}/status` | 200 | 400, 404, 409 same status / concurrent update |
+
+Paged responses look like `{"content":[...],"page":0,"size":20,"totalElements":5,"totalPages":1,"hasNext":false}`. `size` is capped at 100. Errors use RFC 9457 `ProblemDetail`, with an `errors` map for validation failures.
+
+## Database design
+
+```
+customers                       tickets                              ticket_status_changes
+─────────────────────           ───────────────────────────          ─────────────────────────
+id          PK (identity, 100+) id           PK (identity, 1001+)    id           PK
+name                            customer_id  FK → customers.id ─┐    ticket_id    FK → tickets.id (cascade)
+email       UNIQUE              subject                         │    from_status  (null on create)
+tier        CHECK               status       CHECK              │    to_status
+created_at / updated_at         priority     CHECK              │    changed_at
+version     (optimistic lock)   created_at / updated_at / version
+                                ix_tickets_customer_status (customer_id, status)
+                                ix_tickets_status_created  (status, created_at)
+```
+
+| Migration | What it teaches |
+| --- | --- |
+| `V1__create_customers.sql` | identity keys, `UNIQUE` (which creates its own index), `CHECK`, `version` column |
+| `V2__create_tickets.sql` | foreign keys, deliberately *without* cascade on customers; audit table *with* cascade |
+| `V3__add_ticket_indexes.sql` | the schema evolves in a new file; Postgres doesn't index FK columns for you; composite index column order |
+| `db/dev-data/V3_1__dev_sample_data.sql` | data only for `dev` (via `spring.flyway.locations`), inserted with `INSERT … SELECT … JOIN` |
+
+To see an index in use, start the app, then:
+
+```sh
+docker compose exec postgres psql -U support -d support
+support=# \di
+support=# SET enable_seqscan = off;   -- the sample tables are tiny, so Postgres would otherwise scan them
+support=# EXPLAIN SELECT * FROM tickets WHERE customer_id = 100 AND status = 'OPEN';
+```
+
+## Run tests
+
+```sh
+./mvnw test
+```
+
+| Test | Kind | Shows |
+| --- | --- | --- |
+| `TicketRepositoryTest` | `@DataJpaTest` (JPA slice, rolled back per test) | Filtered paging, the LEFT JOIN + GROUP BY summary, **N+1 measured with Hibernate statistics** (entity graph = 0 extra queries; plain `findAll` = 1 per customer), unique and FK constraints enforced by the DB |
+| `CustomerServiceTest` | Plain JUnit + Mockito, no Spring | Business rules; dirty checking means `update` never calls `save` |
+| `CustomerControllerTest`, `TicketControllerTest` | `@WebMvcTest` + `@MockitoBean` | Pageable binding, max page size, sort allow-list, body / path / query validation, status codes |
+| `SupportApiIntegrationTest` | `@SpringBootTest` + MockMvc + `@Transactional` | The full stack on the real migrations: paging, joins, ticket lifecycle with history, CRUD rules |
+| `TicketStatusTransactionTest` | `@SpringBootTest` + `@MockitoSpyBean`, **not** transactional | A failing history insert rolls back the ticket's status change |
+| `SupportServiceApplicationTests` | Full context per profile | dev has sample data and the Flyway endpoint; prod has the schema but no data |
+
+The `test` profile (`src/test/resources/application-test.yml`) replaces PostgreSQL with H2 (`MODE=PostgreSQL`), and every test context gets its own database. The migrations are written in SQL that both databases accept. On Day 14 we switch the integration tests to Testcontainers and a real PostgreSQL.
+
+## Concepts demonstrated
+
+| Concept | Where |
+| --- | --- |
+| **JPA entities** | `domain/Customer`, `Ticket`, `TicketStatusChange`: mutable classes with a protected no-arg constructor, `@Enumerated(STRING)`, `@Version`, id-based `equals`. `@ManyToOne(fetch = LAZY)`, one direction only (no `List<Ticket>` on Customer). |
+| **Flyway** | `db/migration/V1..V3` own the schema; `ddl-auto: validate` makes Hibernate fail at startup if the entities and tables disagree. Never edit an applied migration; add a new one. |
+| **Spring Data repositories** | Derived queries (`findByEmail`, `findByNameContainingIgnoreCase`, `existsByCustomerId`), JPQL `@Query`, optional filters with `(:p is null or …)`. |
+| **Joins** | `join fetch` (`findWithCustomerById`), `@EntityGraph` on a paged query (`search`), and an ad-hoc `left join … on` with `group by` into a constructor-expression projection (`findTicketCounts`) with an explicit `countQuery`. |
+| **N+1 & open-in-view** | `spring.jpa.open-in-view: false`, so lazy loading can't hide in controllers. Fetch plans are chosen in the repository, and the repository test proves the difference. |
+| **Indexes** | FK and query-shaped composite indexes in V3; the unique constraint doubles as the email lookup index. |
+| **Transactions** | `@Transactional(readOnly = true)` on the service class, `@Transactional` on writes. Status change plus audit row are atomic. Optimistic locking (`@Version`) turns lost updates into 409s. The DB constraints are the final guard against races (`DataIntegrityViolationException` → 409). |
+| **DTOs** | `dto/*` records: request bodies with validation, responses that flatten joins (`customerName`), hide internals (`version`, numeric key → `C-100`), and a stable `PageResponse` instead of serializing Spring's `Page`. |
+| **Validation** | Bean Validation on bodies (`@Valid`), on path and query params (built-in method validation → `HandlerMethodValidationException`), and a composed constraint, `@ValidCustomerId`. |
+| **Pagination & sorting** | `Pageable` from `?page&size&sort`, `@PageableDefault`, `max-page-size: 100`, and a sort-property allow-list (`SortGuard`). |
+| **docker-compose** | `compose.yaml` + `spring-boot-docker-compose` for zero-setup local Postgres; `prod` disables it and reads credentials from the environment. |
+
+This is an instructional starter. Still missing for production: authentication and per-customer authorization, `ETag`/`If-Match` so clients can send the version they edited, and keyset pagination for very deep pages. For substring search on large tables it would also need a `pg_trgm` index.

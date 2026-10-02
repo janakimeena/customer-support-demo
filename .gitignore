@@ -1,0 +1,15 @@
+# Build output
+out/
+target/
+*.class
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# Training documents are kept out of the repository
+*.docx
+*.pdf
+Customer_Support_System_Architecture.html
+.~*

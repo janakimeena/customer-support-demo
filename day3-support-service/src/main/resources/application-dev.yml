@@ -1,0 +1,34 @@
+# Developer profile: Postgres from compose.yaml, sample data, SQL logging and introspection endpoints.
+spring:
+  # Used when Postgres is started by hand (docker compose up -d). When spring-boot-docker-compose starts
+  # compose.yaml itself, it supplies the connection details and these three values are ignored.
+  datasource:
+    url: jdbc:postgresql://localhost:5433/support
+    username: support
+    password: support
+  docker:
+    compose:
+      # Leave the container running when the app stops, so the next start is fast and data survives.
+      lifecycle-management: start-only
+  flyway:
+    # Adds V3_1__dev_sample_data.sql on top of the schema migrations.
+    locations: classpath:db/migration,classpath:db/dev-data
+
+support:
+  customer:
+    max-customers: 50
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,beans,env,configprops,conditions,mappings,loggers,flyway
+  endpoint:
+    health:
+      show-details: always
+
+logging:
+  level:
+    com.example.support: DEBUG
+    # Print every SQL statement: the easiest way to spot N+1 queries while developing.
+    org.hibernate.SQL: DEBUG

@@ -1,0 +1,42 @@
+# Render Blueprint: one free web service (Docker) + one free PostgreSQL database.
+# Render dashboard → New → Blueprint → pick this repository.
+services:
+  - type: web
+    name: support-service
+    runtime: docker
+    plan: free
+    dockerContext: ./day3-support-service
+    dockerfilePath: ./day3-support-service/Dockerfile
+    healthCheckPath: /actuator/health
+    envVars:
+      - key: SPRING_PROFILES_ACTIVE
+        value: prod
+      # Demo only: also load the sample customers and tickets (normally dev-only).
+      - key: SPRING_FLYWAY_LOCATIONS
+        value: classpath:db/migration,classpath:db/dev-data
+      - key: SUPPORT_DB_HOST
+        fromDatabase:
+          name: support-db
+          property: host
+      - key: SUPPORT_DB_PORT
+        fromDatabase:
+          name: support-db
+          property: port
+      - key: SUPPORT_DB_NAME
+        fromDatabase:
+          name: support-db
+          property: database
+      - key: SUPPORT_DB_USER
+        fromDatabase:
+          name: support-db
+          property: user
+      - key: SUPPORT_DB_PASSWORD
+        fromDatabase:
+          name: support-db
+          property: password
+
+databases:
+  - name: support-db
+    plan: free
+    databaseName: support
+    user: support

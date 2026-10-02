@@ -1,0 +1,19 @@
+# Production-like profile: no sample data, only health and info exposed, health details hidden.
+support:
+  customer:
+    max-customers: 10000
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: never
+      probes:
+        enabled: true
+
+logging:
+  level:
+    root: INFO

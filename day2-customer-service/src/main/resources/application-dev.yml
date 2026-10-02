@@ -1,0 +1,17 @@
+# Developer profile: sample data, verbose logging, and introspection endpoints for learning.
+support:
+  customer:
+    max-customers: 50
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,beans,env,configprops,conditions,mappings,loggers
+  endpoint:
+    health:
+      show-details: always
+
+logging:
+  level:
+    com.example.support: DEBUG

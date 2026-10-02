@@ -1,0 +1,23 @@
+# Local PostgreSQL for Day 3.
+#   ./mvnw spring-boot:run   starts it automatically (spring-boot-docker-compose), or
+#   docker compose up -d     starts it by hand.
+# Host port 5433 avoids clashing with a locally installed Postgres on 5432.
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: support
+      POSTGRES_USER: support
+      POSTGRES_PASSWORD: support
+    ports:
+      - "5433:5432"
+    volumes:
+      - support-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U support -d support"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  support-db:

@@ -1,0 +1,5 @@
+id,customerId,subject,status,createdAt
+2001,C-200,Cannot sign in,OPEN,2026-09-30T09:02:00Z
+2002,C-201,Return label request,PENDING,2026-09-30T09:11:00Z
+2003,C-202,Duplicate charge,CLOSED,2026-09-30T09:28:00Z
+2004,C-203,Question about warranty,WAITING,2026-09-30T09:34:00Z

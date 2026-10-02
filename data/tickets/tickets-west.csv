@@ -1,0 +1,5 @@
+id,customerId,subject,status,createdAt
+1001,C-100,"Refund status, please",OPEN,2026-09-30T08:15:00Z
+1002,C-101,Package arrived damaged,OPEN,2026-09-30T08:22:00Z
+1003,C-102,Update billing address,PENDING,2026-09-30T08:41:00Z
+broken,C-103,Missing receipt,OPEN,2026-09-30T08:45:00Z
