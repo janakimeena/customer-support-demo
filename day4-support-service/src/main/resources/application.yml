@@ -1,0 +1,61 @@
+# Shared defaults. Profile files (application-<profile>.yml) are loaded on top and win on conflicts.
+spring:
+  application:
+    name: support-service
+  profiles:
+    # Used only when no profile is activated (--spring.profiles.active / SPRING_PROFILES_ACTIVE).
+    default: dev
+
+  jpa:
+    # Flyway creates the schema; Hibernate only checks that the entities match it and fails fast if not.
+    hibernate:
+      ddl-auto: validate
+    # Close the persistence context when the @Transactional service method returns, not at the end of the
+    # HTTP request. Lazy loading in a controller or JSON serializer then fails loudly instead of firing
+    # hidden queries, which forces us to fetch what we need (join fetch / entity graph) in the service.
+    open-in-view: false
+
+  flyway:
+    locations: classpath:db/migration
+
+  data:
+    web:
+      pageable:
+        default-page-size: 20
+        # ?size=100000 is silently capped, so one request can't pull the whole table.
+        max-page-size: 100
+
+server:
+  # Hosting platforms (Render, Heroku-style) tell the app which port to listen on through PORT.
+  port: ${PORT:8080}
+
+support:
+  customer:
+    max-customers: 1000
+    default-tier: STANDARD
+  ingest:
+    # Records per batch/transaction. No sources by default: each profile configures its own.
+    chunk-size: 100
+    max-reported-rejections: 50
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  info:
+    env:
+      enabled: true
+    java:
+      enabled: true
+
+info:
+  app:
+    name: ${spring.application.name}
+    description: Day 4 support service (customers + tickets on PostgreSQL, multi-source customer ingestion)
+
+springdoc:
+  swagger-ui:
+    # Keep endpoints in source order and show the request duration in "Try it out".
+    operations-sorter: method
+    display-request-duration: true

@@ -1,0 +1,9 @@
+Name,Email,Tier,Region
+Asha Rao,asha.rao@example.com,PREMIUM,east
+"  Ben   Carter ",BEN.CARTER@EXAMPLE.COM,premium,east
+Hiro Tanaka,hiro.tanaka@example.com,,east
+Ivy Chen,ivy.chen.example.com,STANDARD,east
+,nobody@example.com,STANDARD,east
+Jon Park,jon.park@example.com,GOLD,east
+"Singh, Kara",kara.singh@example.com,Standard,east
+Hiro T.,HIRO.TANAKA@example.com,PREMIUM,east

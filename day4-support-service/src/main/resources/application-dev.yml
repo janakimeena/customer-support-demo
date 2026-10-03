@@ -1,0 +1,50 @@
+# Developer profile: Postgres from compose.yaml, sample data, SQL logging and introspection endpoints.
+spring:
+  # Used when Postgres is started by hand (docker compose up -d). When spring-boot-docker-compose starts
+  # compose.yaml itself, it supplies the connection details and these three values are ignored.
+  datasource:
+    url: jdbc:postgresql://localhost:5434/support
+    username: support
+    password: support
+  docker:
+    compose:
+      # Leave the container running when the app stops, so the next start is fast and data survives.
+      lifecycle-management: start-only
+  flyway:
+    # Adds V3_1__dev_sample_data.sql and V3_2__legacy_accounts.sql on top of the schema migrations.
+    locations: classpath:db/migration,classpath:db/dev-data
+
+support:
+  customer:
+    max-customers: 50
+  ingest:
+    # Tiny chunks so the demo data spans several batches (watch the JdbcTemplate log lines).
+    chunk-size: 3
+    # The pipeline picks a source by name; the factory builds it from type + location.
+    sources:
+      east-csv:
+        type: CSV
+        location: classpath:sample-data/customers-east.csv
+      partner-crm:
+        type: CRM_API
+        # The fake CRM in demo/DemoCrmController, served by this same app.
+        location: http://localhost:${server.port}/demo/crm
+      legacy-db:
+        type: LEGACY_DB
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,beans,env,configprops,conditions,mappings,loggers,flyway
+  endpoint:
+    health:
+      show-details: always
+
+logging:
+  level:
+    com.example.support: DEBUG
+    # Print every SQL statement: the easiest way to spot N+1 queries while developing.
+    org.hibernate.SQL: DEBUG
+    # Same for plain JDBC (the ingestion batch upsert bypasses Hibernate).
+    org.springframework.jdbc.core.JdbcTemplate: DEBUG

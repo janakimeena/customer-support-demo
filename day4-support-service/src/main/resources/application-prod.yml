@@ -1,0 +1,33 @@
+# Production-like profile: connection from environment variables, no sample data, minimal Actuator.
+spring:
+  datasource:
+    # Either one full JDBC URL, or its parts (hosting platforms such as Render hand out host/port/name separately).
+    url: ${SUPPORT_DB_URL:jdbc:postgresql://${SUPPORT_DB_HOST:localhost}:${SUPPORT_DB_PORT:5432}/${SUPPORT_DB_NAME:support}}
+    username: ${SUPPORT_DB_USER:support}
+    # No default: the password must come from the environment (or a secret store), never from the repo.
+    password: ${SUPPORT_DB_PASSWORD}
+    hikari:
+      # Small enough for free-tier databases, which allow few connections.
+      maximum-pool-size: ${SUPPORT_DB_POOL_SIZE:10}
+  docker:
+    compose:
+      enabled: false
+
+support:
+  customer:
+    max-customers: 10000
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: never
+      probes:
+        enabled: true
+
+logging:
+  level:
+    root: INFO
