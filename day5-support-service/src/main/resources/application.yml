@@ -1,0 +1,109 @@
+# Shared defaults. Profile files (application-<profile>.yml) are loaded on top and win on conflicts.
+spring:
+  application:
+    name: support-service
+  profiles:
+    # Used only when no profile is activated (--spring.profiles.active / SPRING_PROFILES_ACTIVE).
+    default: dev
+
+  jpa:
+    # Flyway creates the schema; Hibernate only checks that the entities match it and fails fast if not.
+    hibernate:
+      ddl-auto: validate
+    # Close the persistence context when the @Transactional service method returns, not at the end of the
+    # HTTP request. Lazy loading in a controller or JSON serializer then fails loudly instead of firing
+    # hidden queries, which forces us to fetch what we need (join fetch / entity graph) in the service.
+    open-in-view: false
+
+  flyway:
+    locations: classpath:db/migration
+
+  # Day 5: GenAI. Spring AI creates one ChatModel and one EmbeddingModel. Several provider starters are on the
+  # classpath, so the provider for each role is chosen here.
+  # Default: Google Gemini for chat (GEMINI_API_KEY), an open-source Hugging Face model for embeddings (no key).
+  # Profiles: "anthropic" switches chat to Claude, "ollama" switches chat and embeddings to a local Ollama.
+  ai:
+    model:
+      chat: google-genai
+      embedding: transformers
+    google:
+      genai:
+        # Gemini Developer API key from Google AI Studio (https://aistudio.google.com/apikey).
+        # From the environment only, never from the repo. The Gemini client refuses to start without a key, so a
+        # placeholder keeps the rest of the app running; /api/assistant/chat etc. then answer 503 "Model not configured".
+        api-key: ${GEMINI_API_KEY:missing-gemini-api-key}
+        chat:
+          model: ${GEMINI_CHAT_MODEL:gemini-3.5-flash}
+          # Room for full answers; the response's finishReason shows MAX_TOKENS if an answer is cut off.
+          max-output-tokens: 8192
+    embedding:
+      transformer:
+        # sentence-transformers/all-MiniLM-L6-v2 from Hugging Face (Apache 2.0): 384 dimensions, ~90 MB, English.
+        # Spring AI runs the ONNX export inside the JVM (ONNX Runtime), with the model's own tokenizer and mean
+        # pooling, so no API key and no extra service. The same model as embedding-demo/compare_embeddings.py.
+        onnx:
+          model-uri: https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/onnx/model.onnx
+        tokenizer:
+          uri: https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/tokenizer.json
+        cache:
+          # Downloaded once on the first start, then loaded from here (also offline).
+          directory: ${user.home}/.cache/spring-ai-onnx
+    anthropic:
+      # Used only with the "anthropic" profile.
+      api-key: ${ANTHROPIC_API_KEY:}
+      chat:
+        model: claude-opus-5-5
+        max-tokens: 16000
+    ollama:
+      # Used only with the "ollama" profile (see compose.yaml to start Ollama).
+      base-url: ${OLLAMA_BASE_URL:http://localhost:11434}
+      embedding:
+        model: nomic-embed-text
+
+  data:
+    web:
+      pageable:
+        default-page-size: 20
+        # ?size=100000 is silently capped, so one request can't pull the whole table.
+        max-page-size: 100
+
+server:
+  # Hosting platforms (Render, Heroku-style) tell the app which port to listen on through PORT.
+  port: ${PORT:8080}
+
+support:
+  customer:
+    max-customers: 1000
+    default-tier: STANDARD
+  ingest:
+    # Records per batch/transaction. No sources by default: each profile configures its own.
+    chunk-size: 100
+    max-reported-rejections: 50
+  assistant:
+    company-name: Acme Support
+    # Questions above this many (estimated) tokens are rejected with 400 before any model call.
+    max-question-tokens: 2000
+    # Claude's effort (anthropic profile only): low | medium | high | xhigh | max.
+    effort: medium
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  info:
+    env:
+      enabled: true
+    java:
+      enabled: true
+
+info:
+  app:
+    name: ${spring.application.name}
+    description: Day 5 support service (customers + tickets on PostgreSQL, customer ingestion, first GenAI assistant)
+
+springdoc:
+  swagger-ui:
+    # Keep endpoints in source order and show the request duration in "Try it out".
+    operations-sorter: method
+    display-request-duration: true

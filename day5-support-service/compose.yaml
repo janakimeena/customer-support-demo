@@ -1,0 +1,38 @@
+# Local PostgreSQL for Day 5 (same as Day 3 and 4), plus an optional Ollama for embeddings / local chat.
+#   ./mvnw spring-boot:run   starts it automatically (spring-boot-docker-compose), or
+#   docker compose up -d     starts it by hand.
+# Host port 5435 avoids clashing with a local Postgres (5432) and the Day 3 and Day 4 containers (5433, 5434).
+#
+# Ollama is in the "ollama" compose profile, so it does NOT start with the app. Start it once by hand:
+#   docker compose --profile ollama up -d ollama
+#   docker compose exec ollama ollama pull nomic-embed-text      # embeddings (/api/assistant/similarity)
+#   docker compose exec ollama ollama pull llama3.2               # only for the app's ollama profile
+# (A natively installed Ollama on port 11434 works the same way.)
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: support
+      POSTGRES_USER: support
+      POSTGRES_PASSWORD: support
+    ports:
+      - "5435:5432"
+    volumes:
+      - support-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U support -d support"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  ollama:
+    image: ollama/ollama:latest
+    profiles: [ollama]
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-models:/root/.ollama
+
+volumes:
+  support-db:
+  ollama-models:

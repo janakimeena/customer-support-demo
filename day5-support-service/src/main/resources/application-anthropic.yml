@@ -1,0 +1,7 @@
+# Optional: answer with Claude instead of Gemini. Embeddings stay on the local Hugging Face model.
+#   export ANTHROPIC_API_KEY=sk-ant-...
+#   ./mvnw spring-boot:run -Dspring-boot.run.profiles=dev,anthropic
+spring:
+  ai:
+    model:
+      chat: anthropic
