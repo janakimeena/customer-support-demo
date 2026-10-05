@@ -1,0 +1,30 @@
+# PGvector + Ollama for the RAG demo.
+#   docker compose up -d
+#   docker compose exec ollama ollama pull qwen2.5:7b          # chat model
+#   docker compose exec ollama ollama pull nomic-embed-text    # embedding model, 768 dimensions
+#   docker compose exec ollama ollama pull bespoke-minicheck   # fact-checking judge (evaluation only)
+# (The app also pulls missing models itself on first start: spring.ai.ollama.init.pull-model-strategy.)
+# Host port 5438 avoids clashing with a local Postgres on 5432 and the Day 3-7 containers (5433-5437).
+# Ollama uses 11434 like Day 6/7: run only one of them at a time, or use a natively installed Ollama instead.
+services:
+  pgvector:
+    image: pgvector/pgvector:pg17
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: ragdb
+    ports:
+      - "5438:5432"
+    volumes:
+      - ragdb:/var/lib/postgresql/data
+
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-models:/root/.ollama
+
+volumes:
+  ragdb:
+  ollama-models:

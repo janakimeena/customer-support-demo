@@ -1,0 +1,35 @@
+spring:
+  application:
+    name: rag-demo
+  datasource:
+    url: jdbc:postgresql://localhost:5438/ragdb
+    username: postgres
+    password: postgres
+  ai:
+    ollama:
+      base-url: ${OLLAMA_BASE_URL:http://localhost:11434}
+      init:
+        # Download a model on first use instead of failing with "model not found".
+        pull-model-strategy: when_missing
+        timeout: 15m
+      chat:
+        options:
+          model: qwen2.5:7b
+          temperature: 0.2
+      embedding:
+        options:
+          model: nomic-embed-text
+    vectorstore:
+      pgvector:
+        initialize-schema: true        # creates the vector_store table
+        index-type: HNSW
+        distance-type: COSINE_DISTANCE
+        dimensions: 768                # MUST match the embedding model
+
+rag:
+  docs-path: classpath:/docs/*
+
+logging:
+  level:
+    # SimpleLoggerAdvisor prints the augmented prompt here: the most useful RAG debugging tool.
+    org.springframework.ai.chat.client.advisor: DEBUG
