@@ -1,0 +1,5 @@
+**/target/
+**/server-stderr.log
+.git
+.idea
+.vscode

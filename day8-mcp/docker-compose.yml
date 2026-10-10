@@ -1,0 +1,38 @@
+# Day 8 MCP demo. See the Docker section in README.md.
+services:
+  # Spring AI host + Gemini. The page and /api/mcp/* work without a key; /api/chat needs one.
+  host:
+    build:
+      context: .
+      target: app
+    image: booknest-mcp-demo
+    ports:
+      - "8080:8080"
+    environment:
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-missing-gemini-api-key}
+      GEMINI_CHAT_MODEL: ${GEMINI_CHAT_MODEL:-gemini-3.5-flash}
+      MCP_LOG_LEVEL: ${MCP_LOG_LEVEL:-INFO}
+
+  # Hand-written client printing every JSON-RPC message. Interactive: use `docker compose run --rm explorer`.
+  explorer:
+    build:
+      context: .
+      target: app
+    image: booknest-mcp-demo
+    profiles: [explorer]
+    working_dir: /app/explorer
+    stdin_open: true
+    tty: true
+    command: ["java", "WireExplorer.java", "/app/booknest-mcp.jar", "--step"]
+
+  # MCP Inspector UI, already connected to BookNest. Open the link with MCP_INSPECTOR_API_TOKEN from its logs.
+  inspector:
+    build:
+      context: .
+      target: inspector
+    image: booknest-mcp-inspector
+    profiles: [inspector]
+    ports:
+      # Loopback only: the Inspector's backend can launch processes, so keep it off the network.
+      - "127.0.0.1:6274:6274"
+      - "127.0.0.1:6275:6275"

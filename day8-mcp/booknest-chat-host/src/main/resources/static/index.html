@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BookNest MCP Host</title>
+<style>
+  :root { --bg:#f7f7f5; --card:#fff; --ink:#1d1d1f; --muted:#6b6b70; --line:#e2e2e0;
+          --tool:#2f6fdb; --res:#1f8a5b; --prompt:#9a4fd1; --warn:#c0661a; }
+  * { box-sizing: border-box; }
+  body { margin:0; font:15px/1.5 system-ui, sans-serif; background:var(--bg); color:var(--ink); }
+  header { padding:20px 24px 8px; }
+  h1 { margin:0; font-size:22px; }
+  header p { margin:4px 0 0; color:var(--muted); }
+  .flow { display:flex; gap:8px; align-items:center; flex-wrap:wrap; padding:8px 24px 16px; font-size:13px; }
+  .flow span { background:var(--card); border:1px solid var(--line); border-radius:6px; padding:4px 10px; }
+  .flow b { color:var(--muted); font-weight:400; }
+  main { display:grid; grid-template-columns: minmax(0,1fr) minmax(0,1.3fr); gap:16px; padding:0 24px 24px; }
+  @media (max-width: 900px) { main { grid-template-columns: 1fr; } }
+  section { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:16px; min-width:0; }
+  h2 { margin:0 0 4px; font-size:16px; }
+  .hint { color:var(--muted); font-size:13px; margin:0 0 12px; }
+  .tag { display:inline-block; font-size:11px; font-weight:600; padding:1px 7px; border-radius:10px; color:#fff; margin-right:6px; }
+  .t-tool{background:var(--tool)} .t-res{background:var(--res)} .t-prompt{background:var(--prompt)}
+  .item { border-top:1px solid var(--line); padding:8px 0; }
+  .item code { font-weight:600; }
+  .item .d { color:var(--muted); font-size:13px; }
+  details summary { cursor:pointer; color:var(--muted); font-size:12px; }
+  pre { background:#f2f2ef; border-radius:6px; padding:8px; font-size:12px; overflow:auto; white-space:pre-wrap; word-break:break-word; margin:6px 0; }
+  textarea, input, select { font:inherit; width:100%; padding:8px; border:1px solid var(--line); border-radius:6px; background:#fff; color:inherit; }
+  textarea { min-height:70px; }
+  button { font:inherit; padding:7px 14px; border-radius:6px; border:1px solid var(--ink); background:var(--ink); color:#fff; cursor:pointer; }
+  button.secondary { background:transparent; color:var(--ink); }
+  button:disabled { opacity:.5; cursor:wait; }
+  .row { display:flex; gap:8px; align-items:center; margin:8px 0; flex-wrap:wrap; }
+  .row label { display:flex; gap:6px; align-items:center; font-size:13px; }
+  .row input[type=checkbox] { width:auto; }
+  .chips button { font-size:12px; padding:3px 9px; }
+  .step { border-left:3px solid var(--line); padding:4px 0 4px 10px; margin:10px 0; }
+  .step.tool { border-color:var(--tool); } .step.res { border-color:var(--res); }
+  .step.prompt { border-color:var(--prompt); } .step.err { border-color:var(--warn); }
+  .step h3 { margin:0; font-size:13px; }
+  .answer { white-space:pre-wrap; }
+</style>
+</head>
+<body>
+<header>
+  <h1>BookNest MCP Host</h1>
+  <p>This page is the <b>host</b>. It has one MCP <b>client</b> connected to the BookNest <b>server</b> over stdio.</p>
+</header>
+<div class="flow">
+  <span>You</span><b>→</b><span>Host (this app + Gemini)</span><b>→</b><span>MCP client</span><b>⇄ JSON-RPC over stdio ⇄</b><span>booknest-mcp.jar</span>
+</div>
+
+<main>
+  <section>
+    <h2>1. What the server advertised</h2>
+    <p class="hint">Found during discovery (<code>initialize</code>, <code>tools/list</code>, <code>resources/list</code>, <code>prompts/list</code>). No model involved.</p>
+    <div id="server"></div>
+    <div id="primitives">Connecting…</div>
+  </section>
+
+  <section>
+    <h2>2. Ask the model</h2>
+    <p class="hint">Gemini sees the tool descriptions and decides which to call. The host runs each call and sends the result back.</p>
+    <textarea id="msg">Which Java books do you have, and what does Effective Java cost?</textarea>
+    <div class="row chips">
+      <button class="secondary" data-q="Which Java books do you have, and what does Effective Java cost?">Search + price</button>
+      <button class="secondary" data-q="What is the price of book B9?">Unknown ID</button>
+      <button class="secondary" data-q="Show me everything under Rs. 700.">Max price</button>
+      <button class="secondary" data-q="Can I return an e-book I bought yesterday?" data-policy="1">Policy question</button>
+    </div>
+    <div class="row">
+      <label><input type="checkbox" id="policy"> Attach resource <code>booknest://policies/returns</code> as context</label>
+      <button id="send">Send</button>
+    </div>
+
+    <h2 style="margin-top:18px">3. Use the server's prompt</h2>
+    <p class="hint">The host fetches <code>recommend-books</code> with <code>prompts/get</code> and sends the filled-in text as your message.</p>
+    <div class="row">
+      <input id="topic" value="concurrency" placeholder="topic" style="flex:2">
+      <select id="level" style="flex:1"><option>beginner</option><option selected>intermediate</option><option>advanced</option></select>
+      <button id="recommend">Recommend</button>
+    </div>
+
+    <div id="trace"></div>
+  </section>
+</main>
+
+<script>
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const pretty = s => { try { return JSON.stringify(typeof s === 'string' ? JSON.parse(s) : s, null, 2); } catch { return s; } };
+
+async function getJson(url, opts) {
+  const res = await fetch(url, opts);
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(body.detail || body.message || body.error || res.statusText);
+  return body;
+}
+
+async function loadServer() {
+  try {
+    const [servers, tools, res, prompts] = await Promise.all(
+      ['/api/mcp/servers', '/api/mcp/tools', '/api/mcp/resources', '/api/mcp/prompts'].map(u => getJson(u)));
+    const s = servers[0] || {};
+    $('server').innerHTML = `<p><b>${esc(s.serverInfo?.name)}</b> v${esc(s.serverInfo?.version)}
+      <details><summary>initialize result: capabilities + instructions</summary><pre>${esc(pretty({capabilities: s.capabilities, instructions: s.instructions}))}</pre></details></p>`;
+    const items = [];
+    for (const t of tools) items.push(`<div class="item"><span class="tag t-tool">tool</span><code>${esc(t.name)}</code>
+      <div class="d">${esc(t.description)}</div>
+      <details><summary>inputSchema</summary><pre>${esc(pretty(t.inputSchema))}</pre></details></div>`);
+    for (const r of res.resources) items.push(`<div class="item"><span class="tag t-res">resource</span><code>${esc(r.uri)}</code>
+      <div class="d">${esc(r.description)}</div>
+      <details data-uri="${esc(r.uri)}"><summary>resources/read</summary><pre>…</pre></details></div>`);
+    for (const r of res.resourceTemplates) items.push(`<div class="item"><span class="tag t-res">template</span><code>${esc(r.uriTemplate)}</code>
+      <div class="d">${esc(r.description)}</div>
+      <details data-uri="${esc(r.uriTemplate.replace('{id}', 'B3'))}"><summary>resources/read with id=B3</summary><pre>…</pre></details></div>`);
+    for (const p of prompts) items.push(`<div class="item"><span class="tag t-prompt">prompt</span><code>${esc(p.name)}</code>
+      <div class="d">${esc(p.description)} · args: ${p.arguments.map(a => esc(a.name) + (a.required ? '*' : '')).join(', ')}</div></div>`);
+    $('primitives').innerHTML = items.join('');
+    document.querySelectorAll('details[data-uri]').forEach(d => d.addEventListener('toggle', async () => {
+      if (!d.open || d.dataset.loaded) return;
+      const r = await getJson('/api/mcp/resources/read?uri=' + encodeURIComponent(d.dataset.uri));
+      d.querySelector('pre').textContent = r.contents.map(c => c.text).join('\n');
+      d.dataset.loaded = 1;
+    }));
+  } catch (e) {
+    $('primitives').innerHTML = `<div class="step err">Could not reach the MCP server: ${esc(e.message)}</div>`;
+  }
+}
+
+function render(r, label) {
+  const steps = [];
+  steps.push(`<div class="step ${label === 'prompt' ? 'prompt' : ''}"><h3>${label === 'prompt' ? 'User message (from prompts/get recommend-books)' : 'User message'}</h3><pre>${esc(r.userMessage)}</pre></div>`);
+  if (r.attachedContext) steps.push(`<div class="step res"><h3>Host attached resource booknest://policies/returns</h3><pre>${esc(r.attachedContext)}</pre></div>`);
+  steps.push(`<div class="step"><h3>Tools offered to the model</h3><div class="d">${r.toolsOffered.map(esc).join(', ')}</div></div>`);
+  if (!r.toolCalls.length) steps.push(`<div class="step"><h3>The model called no tools</h3></div>`);
+  r.toolCalls.forEach((c, i) => steps.push(`<div class="step tool"><h3>tools/call #${i + 1}: ${esc(c.tool)}</h3>
+    <div class="d">arguments chosen by the model</div><pre>${esc(pretty(c.arguments))}</pre>
+    <div class="d">result returned by the server</div><pre>${esc(pretty(c.result))}</pre></div>`));
+  steps.push(`<div class="step"><h3>Final answer</h3><div class="answer">${esc(r.answer)}</div></div>`);
+  $('trace').innerHTML = steps.join('');
+}
+
+async function run(url, body, label) {
+  const buttons = [$('send'), $('recommend')];
+  buttons.forEach(b => b.disabled = true);
+  $('trace').innerHTML = '<div class="step"><h3>Thinking… (model + tool calls)</h3></div>';
+  try {
+    render(await getJson(url, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)}), label);
+  } catch (e) {
+    $('trace').innerHTML = `<div class="step err"><h3>Error</h3>${esc(e.message)}</div>`;
+  } finally {
+    buttons.forEach(b => b.disabled = false);
+  }
+}
+
+$('send').onclick = () => run('/api/chat', {message: $('msg').value, attachReturnPolicy: $('policy').checked}, 'chat');
+$('recommend').onclick = () => run('/api/chat/recommend', {topic: $('topic').value, level: $('level').value}, 'prompt');
+document.querySelectorAll('.chips button').forEach(b => b.onclick = () => {
+  $('msg').value = b.dataset.q;
+  $('policy').checked = !!b.dataset.policy;
+});
+loadServer();
+</script>
+</body>
+</html>

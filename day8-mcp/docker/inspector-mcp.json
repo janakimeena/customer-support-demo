@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "booknest": {
+      "command": "java",
+      "args": ["-jar", "/app/booknest-mcp.jar"]
+    }
+  }
+}

@@ -1,0 +1,42 @@
+spring:
+  application:
+    name: booknest-chat-host
+
+  # Errors as RFC 9457 problem details, so the page can show the reason.
+  mvc:
+    problemdetails:
+      enabled: true
+
+  ai:
+    mcp:
+      client:
+        # Our identity in the initialize handshake.
+        name: booknest-chat-host
+        version: 1.0.0
+        type: sync
+        request-timeout: 30s
+        # One entry per server. Each becomes its own MCP client connection (notes §3).
+        # The host launches the server process itself: this is the stdio transport.
+        stdio:
+          connections:
+            booknest:
+              command: java
+              args:
+                - -jar
+                # Relative to the directory the host is started from. Override with BOOKNEST_SERVER_JAR.
+                - ${BOOKNEST_SERVER_JAR:../booknest-mcp-server/target/booknest-mcp.jar}
+
+    google:
+      genai:
+        # Gemini Developer API key from Google AI Studio (https://aistudio.google.com/apikey).
+        # From the environment only, never from the repo. The Gemini client refuses to start without a key, so a
+        # placeholder keeps the host running; the /api/mcp endpoints work, and /api/chat answers 503.
+        api-key: ${GEMINI_API_KEY:missing-gemini-api-key}
+        chat:
+          model: ${GEMINI_CHAT_MODEL:gemini-3.5-flash}
+          max-output-tokens: 4000
+
+logging:
+  level:
+    # DEBUG shows each JSON-RPC message the client sends and receives.
+    io.modelcontextprotocol: ${MCP_LOG_LEVEL:INFO}

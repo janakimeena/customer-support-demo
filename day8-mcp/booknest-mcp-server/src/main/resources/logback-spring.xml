@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    stdio golden rule (notes §6): stdout belongs to the protocol.
+    Every log line, including Spring's own startup lines, goes to stderr instead.
+    The host shows stderr as server diagnostics.
+-->
+<configuration>
+    <appender name="STDERR" class="ch.qos.logback.core.ConsoleAppender">
+        <target>System.err</target>
+        <encoder>
+            <pattern>%d{HH:mm:ss.SSS} %-5level %logger{20} - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <!-- Harmless startup noise from the annotation scanner. -->
+    <logger name="org.springframework.context.support.PostProcessorRegistrationDelegate" level="ERROR"/>
+
+    <root level="INFO">
+        <appender-ref ref="STDERR"/>
+    </root>
+</configuration>
